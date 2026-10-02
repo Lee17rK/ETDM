@@ -120,10 +120,10 @@
             <a href="https://youtu.be/5j-Mag9SWr4" class="yt-btn btn-share" target="_blank">Share</a>
         </div>
 
-        <!-- Added ID's here so JavaScript can easily target and update them -->
+        <!-- The ID tags allow JS to inject the real file details here automatically -->
         <a href="https://www.mediafire.com/file/tdmkclqtt80o3i1/Eticket-Tofask-v136(MoDsWithK)File.apk/file" id="auto-download-btn" class="download-btn" target="_blank">
             Download
-            <span id="auto-file-info" class="file-name">Loading file info...</span>
+            <span id="auto-file-info" class="file-name">Fetching file info...</span>
         </a>
 
     </div>
@@ -132,56 +132,54 @@
         &copy; 2026 MoDsWithK | All custom modifications are thoroughly tested.
     </footer>
 
-    <!-- JavaScript to automatically fetch file name and size from MediaFire -->
+    <!-- Stronger JavaScript to automatically fetch file name and size -->
     <script>
         document.addEventListener("DOMContentLoaded", async () => {
             const btn = document.getElementById("auto-download-btn");
             const infoSpan = document.getElementById("auto-file-info");
             const mediafireUrl = btn.href;
 
-            // Use allorigins to bypass CORS restrictions
-            const proxyUrl = `https://api.allorigins.win/get?url=${encodeURIComponent(mediafireUrl)}`;
+            // Using the 'raw' endpoint to bypass JSON parsing issues
+            const proxyUrl = `https://api.allorigins.win/raw?url=${encodeURIComponent(mediafireUrl)}`;
 
             try {
                 const response = await fetch(proxyUrl);
-                const data = await response.json();
-                const htmlString = data.contents;
+                if (!response.ok) throw new Error("Network response failed");
+                const htmlString = await response.text();
 
-                // Parse the fetched Mediafire HTML
-                const parser = new DOMParser();
-                const doc = parser.parseFromString(htmlString, "text/html");
+                // 1. Extract File Name using Regex (scans the meta tags directly)
+                let fileName = "Download File";
+                const titleMatch = htmlString.match(/<meta property="og:title" content="([^"]+)"/i) || 
+                                   htmlString.match(/<title>(.*?)<\/title>/i);
+                
+                if (titleMatch && titleMatch[1]) {
+                    // Clean up title just in case it says "- MediaFire" at the end
+                    fileName = titleMatch[1].replace(' - MediaFire', '').trim();
+                }
 
-                // 1. Extract File Name
-                // MediaFire usually keeps the file name in a title attribute inside .dl-btn-label or in the <title> tag
-                let fileName = "Unknown File";
-                const nameElement = doc.querySelector('.dl-btn-label');
-                if (nameElement && nameElement.hasAttribute('title')) {
-                    fileName = nameElement.getAttribute('title').replace(/^Download\s+/i, '');
+                // 2. Extract File Size using Regex
+                // Looks for "Download (831 MB)" inside the page code
+                let fileSize = "";
+                const sizeMatch = htmlString.match(/Download\s*\(([^)]+)\)/i) || 
+                                  htmlString.match(/File size:\s*<span>([^<]+)<\/span>/i);
+                
+                if (sizeMatch && sizeMatch[1]) {
+                    fileSize = sizeMatch[1];
+                }
+
+                // Update the button automatically
+                if (fileSize) {
+                    infoSpan.textContent = `${fileName} (${fileSize})`;
                 } else {
-                    // Fallback to page title
-                    const titleMatch = htmlString.match(/<title>(.*?)<\/title>/);
-                    if (titleMatch) fileName = titleMatch[1];
+                    infoSpan.textContent = fileName;
                 }
-
-                // 2. Extract File Size
-                // MediaFire usually puts the size inside the download button text like: "Download (831 MB)"
-                let fileSize = "Unknown Size";
-                const sizeElement = doc.querySelector('.download_link a.input');
-                if (sizeElement) {
-                    const sizeMatch = sizeElement.textContent.match(/\(([^)]+)\)/); // Looks for text between parentheses
-                    if (sizeMatch && sizeMatch[1]) {
-                        fileSize = sizeMatch[1];
-                    }
-                }
-
-                // Update the webpage with fetched data
-                infoSpan.textContent = `${fileName} (${fileSize})`;
+                
                 btn.setAttribute("download", fileName);
 
             } catch (error) {
-                console.error("Failed to fetch data from Mediafire:", error);
-                // Fallback text if the fetch fails
-                infoSpan.textContent = "Click to view file & size";
+                console.error("Failed to fetch data:", error);
+                // Clean fallback without any error text if the user's internet is slow
+                infoSpan.textContent = "Click to Download";
             }
         });
     </script>
